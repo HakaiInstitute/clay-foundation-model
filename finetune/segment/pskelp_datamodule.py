@@ -87,7 +87,7 @@ class PSKelpDataset(Dataset):
         label = np.load(label_name)['data']
 
         # Remap labels to match desired classes
-        label_mapping = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4}
+        label_mapping = {0: 0, 1: 1, 2: 0, 3: 0, 4: 0,}
         remapped_label = np.vectorize(label_mapping.get)(label)
 
         sample = {

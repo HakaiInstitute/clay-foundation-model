@@ -4,11 +4,11 @@ Segmentor class.
 """
 
 import lightning as L
-import segmentation_models_pytorch as smp
 import torch
 import torch.nn.functional as F
+from segmentation_models_pytorch.losses import LovaszLoss
 from torch import optim
-from torchmetrics.classification import F1Score, MulticlassJaccardIndex
+from torchmetrics.classification import F1Score, JaccardIndex
 
 from finetune.segment.factory import Segmentor
 
@@ -41,15 +41,15 @@ class PSKelpSegmentor(L.LightningModule):
             ckpt_path=ckpt_path,
         )
 
-        self.loss_fn = smp.losses.FocalLoss(mode="multiclass")
-        self.iou = MulticlassJaccardIndex(
-            num_classes=num_classes,
-            average="weighted",
+        self.loss_fn = LovaszLoss(mode="binary")
+        self.iou = JaccardIndex(
+            task="binary",
+            average="macro",
         )
         self.f1 = F1Score(
-            task="multiclass",
+            task="binary",
             num_classes=num_classes,
-            average="weighted",
+            average="macro",
         )
 
     def forward(self, datacube):
@@ -124,7 +124,7 @@ class PSKelpSegmentor(L.LightningModule):
         Returns:
             torch.Tensor: The loss value.
         """
-        labels = batch["label"].long()
+        labels = batch["label"].long().unsqueeze(1)  # [B H W]
         outputs = self(batch)
         outputs = F.interpolate(
             outputs,

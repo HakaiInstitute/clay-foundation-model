@@ -12,7 +12,7 @@ data:
   num_workers: 8
   platform: planetscope-sr
 model:
-  num_classes: 3
+  num_classes: 1
   ckpt_path: checkpoints/clay-v1.5.ckpt
   lr: 1e-5
   wd: 0.05
@@ -42,7 +42,7 @@ trainer:
       init_args:
         dirpath: checkpoints/segment
         auto_insert_metric_name: False
-        filename: kelp-3class-segment_epoch-{epoch:02d}_val-iou-{val/iou:.4f}
+        filename: kelp-1class-segment_epoch-{epoch:02d}_val-iou-{val/iou:.4f}
         monitor: val/iou
         mode: max
         save_last: True
