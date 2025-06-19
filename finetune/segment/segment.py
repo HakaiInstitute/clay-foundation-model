@@ -12,18 +12,18 @@ References:
 
 from lightning.pytorch.cli import LightningCLI
 
-from finetune.segment.chesapeake_datamodule import ChesapeakeDataModule  # noqa: F401
-from finetune.segment.chesapeake_model import ChesapeakeSegmentor  # noqa: F401
+from finetune.segment.pskelp_datamodule import PSKelpDataModule  # noqa: F401
+from finetune.segment.pskelp_model import PSKelpSegmentor  # noqa: F401
 
 
 # %%
 def cli_main():
     """
-    Command-line inteface to run Segmentation Model with ChesapeakeDataModule.
+    Command-line inteface to run Segmentation Model with PSKelpDataModule.
     """
     cli = LightningCLI(
-        ChesapeakeSegmentor,
-        ChesapeakeDataModule,
+        PSKelpSegmentor,
+        PSKelpDataModule,
         save_config_kwargs={"overwrite": True},
     )
     return cli

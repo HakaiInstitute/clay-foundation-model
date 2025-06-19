@@ -13,7 +13,7 @@ from torchmetrics.classification import F1Score, MulticlassJaccardIndex
 from finetune.segment.factory import Segmentor
 
 
-class ChesapeakeSegmentor(L.LightningModule):
+class PSKelpSegmentor(L.LightningModule):
     """
     LightningModule for segmentation tasks, utilizing Clay Segmentor.
 
@@ -63,8 +63,10 @@ class ChesapeakeSegmentor(L.LightningModule):
         Returns:
             torch.Tensor: The segmentation logits.
         """
-        waves = torch.tensor([0.65, 0.56, 0.48, 0.842])  # NAIP wavelengths
-        gsd = torch.tensor(1.0)  # NAIP GSD
+        waves = torch.tensor(
+            [0.443, 0.490, 0.531, 0.565, 0.610, 0.665, 0.705, 0.865]
+        )  # Planet SR wavelengths
+        gsd = torch.tensor(5.0)  # Planet SR GSD
 
         # Forward pass through the network
         return self.model(

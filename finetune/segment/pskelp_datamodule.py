@@ -13,7 +13,6 @@ Proceedings of the 2019 Conference on Computer Vision and Pattern Recognition
 Dataset URL: https://lila.science/datasets/chesapeakelandcover
 """
 
-import re
 from pathlib import Path
 
 import lightning as L
@@ -25,7 +24,7 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import v2
 
 
-class ChesapeakeDataset(Dataset):
+class PSKelpDataset(Dataset):
     """
     Dataset class for the Chesapeake Bay segmentation dataset.
 
@@ -46,10 +45,10 @@ class ChesapeakeDataset(Dataset):
         )
 
         # Load chip and label file names
-        self.chips = [chip_path.name for chip_path in self.chip_dir.glob("*.npy")][
-            :1000
-        ]
-        self.labels = [re.sub("_naip-new_", "_lc_", chip) for chip in self.chips]
+        self.chips = [chip_path.name for chip_path in self.chip_dir.glob("*.npz")]
+        self.labels = [
+            chip for chip in self.chips
+        ]  # Labels are assumed to have the same names as chips
 
     def create_transforms(self, mean, std):
         """
@@ -84,11 +83,11 @@ class ChesapeakeDataset(Dataset):
         chip_name = self.chip_dir / self.chips[idx]
         label_name = self.label_dir / self.labels[idx]
 
-        chip = np.load(chip_name).astype(np.float32)
-        label = np.load(label_name)
+        chip = np.load(chip_name)['data'].astype(np.float32)
+        label = np.load(label_name)['data']
 
         # Remap labels to match desired classes
-        label_mapping = {1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 15: 6}
+        label_mapping = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4}
         remapped_label = np.vectorize(label_mapping.get)(label)
 
         sample = {
@@ -100,7 +99,7 @@ class ChesapeakeDataset(Dataset):
         return sample
 
 
-class ChesapeakeDataModule(L.LightningDataModule):
+class PSKelpDataModule(L.LightningDataModule):
     """
     DataModule class for the Chesapeake Bay dataset.
 
@@ -121,6 +120,8 @@ class ChesapeakeDataModule(L.LightningDataModule):
         train_label_dir,
         val_chip_dir,
         val_label_dir,
+        test_chip_dir,
+        test_label_dir,
         metadata_path,
         batch_size,
         num_workers,
@@ -131,6 +132,8 @@ class ChesapeakeDataModule(L.LightningDataModule):
         self.train_label_dir = train_label_dir
         self.val_chip_dir = val_chip_dir
         self.val_label_dir = val_label_dir
+        self.test_chip_dir = test_chip_dir
+        self.test_label_dir = test_label_dir
         self.metadata = Box(yaml.safe_load(open(metadata_path)))
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -144,15 +147,22 @@ class ChesapeakeDataModule(L.LightningDataModule):
             stage (str): Stage identifier ('fit' or 'test').
         """
         if stage in {"fit", None}:
-            self.trn_ds = ChesapeakeDataset(
+            self.trn_ds = PSKelpDataset(
                 self.train_chip_dir,
                 self.train_label_dir,
                 self.metadata,
                 self.platform,
             )
-            self.val_ds = ChesapeakeDataset(
+            self.val_ds = PSKelpDataset(
                 self.val_chip_dir,
                 self.val_label_dir,
+                self.metadata,
+                self.platform,
+            )
+        if stage in {"test", None}:
+            self.test_ds = PSKelpDataset(
+                self.test_chip_dir,
+                self.test_label_dir,
                 self.metadata,
                 self.platform,
             )
@@ -180,6 +190,19 @@ class ChesapeakeDataModule(L.LightningDataModule):
         """
         return DataLoader(
             self.val_ds,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+        )
+
+    def test_dataloader(self):
+        """
+        Create DataLoader for test data.
+
+        Returns:
+            DataLoader: DataLoader for test dataset.
+        """
+        return DataLoader(
+            self.test_ds,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
         )

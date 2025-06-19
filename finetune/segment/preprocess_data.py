@@ -1,99 +1,118 @@
 r"""
-Chesapeake CVPR Data Processing Script
-======================================
-
-This script processes GeoTIFF files from the Chesapeake CVPR dataset to create
-image chips for segmentation tasks.
-
-Dataset Source:
----------------
-Chesapeake CVPR data from LILA:
-https://lila.science/datasets/chesapeakelandcover
-
-For this experiment, we will use images from NY.
-
-Notes:
-------
-1. Only copy *_lc.tif & *_naip-new.tif files that we will use for our
-segmentation downstream task.
-   Using s5cmd for this: https://github.com/peak/s5cmd
-   - Train:
-   s5cmd cp \
-        --no-sign-request \
-        --include "*_lc.tif" \
-        --include "*_naip-new.tif" \
-        "s3://us-west-2.opendata.source.coop/agentmorris/lila-wildlife/lcmcvpr2019/cvpr_chesapeake_landcover/ny_1m_2013_extended-debuffered-train_tiles/*" \
-        data/cvpr/files/train/
-   - Val:
-   s5cmd cp \
-        --no-sign-request \
-        --include "*_lc.tif" \
-        --include "*_naip-new.tif" \
-        "s3://us-west-2.opendata.source.coop/agentmorris/lila-wildlife/lcmcvpr2019/cvpr_chesapeake_landcover/ny_1m_2013_extended-debuffered-val_tiles/*" \
-        data/cvpr/files/val/
-
-2. We will create chips of size `224 x 224` to feed them to the model, feel
+We will create chips of size `224 x 224` to feed them to the model, feel
 free to experiment with other chip sizes as well.
    Run the script as follows:
-   python preprocess_data.py <data_dir> <output_dir> <chip_size>
+   python preprocess_data.py <data_dir> <output_dir> <chip_size> <chip_stride? (defaults to chip_size)>
 
    Example:
-   python preprocess_data.py data/cvpr/files data/cvpr/ny 224
+   python preprocess_data.py data/ps_8b/ data/ps_8b_tiled 224
 """  # noqa E501
 
-import os
 import sys
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
-import rasterio as rio
+import torch
+from torch.utils.data import DataLoader
+from torchgeo.datasets import RasterDataset
+from torchgeo.datasets.utils import stack_samples
+from torchgeo.samplers import GridGeoSampler
+from tqdm.auto import tqdm
+
+NUM_BANDS = 8
+MAX_NODATA_PROPORTION = 0.0
 
 
-def read_and_chip(file_path, chip_size, output_dir):
-    """
-    Reads a GeoTIFF file, creates chips of specified size, and saves them as
-    numpy arrays.
+class PlanetRasterDataset_SR_8b(RasterDataset):
+    filename_glob = "**/*_AnalyticMS_SR_8b_*.tif"
+    filename_regex = r"^(?P<date>\d{8})_.+"
+    date_format = "%Y%m%d"
+    is_image = True
+    separate_files = False
 
-    Args:
-        file_path (str or Path): Path to the GeoTIFF file.
-        chip_size (int): Size of the square chips.
-        output_dir (str or Path): Directory to save the chips.
-    """
-    os.makedirs(output_dir, exist_ok=True)
+    rgb_indices = (5, 3, 1)
 
-    with rio.open(file_path) as src:
-        data = src.read()
+    @classmethod
+    def plot(cls, sample, ax=None):
+        image = sample[cls.rgb_indices].permute(1, 2, 0)
+        image = torch.clamp(image / 3000, min=0, max=1).numpy()
 
-        n_chips_x = src.width // chip_size
-        n_chips_y = src.height // chip_size
-
-        chip_number = 0
-        for i in range(n_chips_x):
-            for j in range(n_chips_y):
-                x1, y1 = i * chip_size, j * chip_size
-                x2, y2 = x1 + chip_size, y1 + chip_size
-
-                chip = data[:, y1:y2, x1:x2]
-                chip_path = os.path.join(
-                    output_dir,
-                    f"{Path(file_path).stem}_chip_{chip_number}.npy",
-                )
-                np.save(chip_path, chip)
-                chip_number += 1
+        if ax is None:
+            fig, ax = plt.subplots()
+        ax.imshow(image)
+        return ax
 
 
-def process_files(file_paths, output_dir, chip_size):
-    """
-    Processes a list of files, creating chips and saving them.
+class KelpLabelsDataset(RasterDataset):
+    filename_glob = "**/*_AnalyticMS_SR_8b_*.tif"
+    filename_regex = r"^(?P<date>\d{8})_.+"
+    date_format = "%Y%m%d"
+    is_image = False
 
-    Args:
-        file_paths (list of Path): List of paths to the GeoTIFF files.
-        output_dir (str or Path): Directory to save the chips.
-        chip_size (int): Size of the square chips.
-    """
-    for file_path in file_paths:
-        print(f"Processing: {file_path}")
-        read_and_chip(file_path, chip_size, output_dir)
+    bg_value = 0
+
+    @classmethod
+    def plot(cls, sample, ax=None):
+        if ax is None:
+            fig, ax = plt.subplots()
+        mask = np.ma.masked_where(sample == cls.bg_value, sample)
+        ax.imshow(mask, cmap="summer", alpha=0.5)
+        return ax
+
+
+def create_chips(out_root, name, dset, chip_size=224, chip_stride=224):
+    out_dir = out_root / name
+    (out_dir / "images").mkdir(exist_ok=True, parents=True)
+    (out_dir / "labels").mkdir(exist_ok=True, parents=True)
+
+    sampler = GridGeoSampler(dset, size=chip_size, stride=chip_stride)
+    dataloader = DataLoader(
+        dset,
+        sampler=sampler,
+        num_workers=4,
+        prefetch_factor=2,
+        collate_fn=stack_samples,
+    )
+
+    for i, batch in enumerate(tqdm(dataloader, desc=name)):
+        img = batch["image"]
+        label = batch["mask"]
+
+        black_pixels = (img == torch.zeros((1, NUM_BANDS, 1, 1))).sum()
+        bad_data = (label > 2).sum()
+        kelp_pixels = (label == 1).sum()
+        total_pixels = img.numel() / NUM_BANDS
+        height = img.shape[2]
+        width = img.shape[3]
+
+        if (
+            (bad_data > 0)
+            or (kelp_pixels == 0)
+            or (black_pixels / total_pixels) > MAX_NODATA_PROPORTION
+            or height < chip_size
+            or width < chip_size
+        ):
+            continue
+
+        # Convert to numpy arrays
+        img_array = img[0].numpy().astype(np.float32)  # Convert to float32
+        label_array = label.numpy().astype(
+            np.uint8
+        )  # Keep labels as uint8 for efficiency
+
+        # Save the image as npz
+        np.savez_compressed(out_dir / "images" / f"{i}.npz", data=img_array)
+
+        # Save the label as npz
+        np.savez_compressed(out_dir / "labels" / f"{i}.npz", data=label_array)
+
+
+def load_dataset(data_dir):
+    images = PlanetRasterDataset_SR_8b(data_dir / "images")
+    labels = KelpLabelsDataset(data_dir / "labels")
+
+    return images & labels
 
 
 def main():
@@ -104,23 +123,25 @@ def main():
         - output_dir: Directory to save the output chips.
         - chip_size: Size of the square chips.
     """
-    if len(sys.argv) != 4:  # noqa: PLR2004
-        print("Usage: python script.py <data_dir> <output_dir> <chip_size>")
+    if 4 > len(sys.argv) > 5:  # noqa: PLR2004
+        print(
+            "Usage: python script.py <data_dir> <output_dir> <chip_size> <chip_stride=chip_size>"
+        )
         sys.exit(1)
 
     data_dir = Path(sys.argv[1])
     output_dir = Path(sys.argv[2])
     chip_size = int(sys.argv[3])
+    chip_stride = int(sys.argv[4]) if len(sys.argv) > 4 else chip_size
 
-    train_image_paths = list((data_dir / "train").glob("*_naip-new.tif"))
-    val_image_paths = list((data_dir / "val").glob("*_naip-new.tif"))
-    train_label_paths = list((data_dir / "train").glob("*_lc.tif"))
-    val_label_paths = list((data_dir / "val").glob("*_lc.tif"))
+    train_ds = load_dataset(data_dir / "train")
+    create_chips(output_dir, "train", train_ds, chip_size, chip_stride)
 
-    process_files(train_image_paths, output_dir / "train/chips", chip_size)
-    process_files(val_image_paths, output_dir / "val/chips", chip_size)
-    process_files(train_label_paths, output_dir / "train/labels", chip_size)
-    process_files(val_label_paths, output_dir / "val/labels", chip_size)
+    val_ds = load_dataset(data_dir / "val")
+    create_chips(output_dir, "val", val_ds, chip_size, chip_stride)
+
+    test_ds = load_dataset(data_dir / "test")
+    create_chips(output_dir, "test", test_ds, chip_size, chip_stride)
 
 
 if __name__ == "__main__":
