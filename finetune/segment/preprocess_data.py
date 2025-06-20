@@ -8,7 +8,7 @@ free to experiment with other chip sizes as well.
    python preprocess_data.py data/ps_8b/ data/ps_8b_tiled 224
 """  # noqa E501
 
-import sys
+import argparse
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -22,6 +22,14 @@ from tqdm.auto import tqdm
 
 NUM_BANDS = 8
 MAX_NODATA_PROPORTION = 0.0
+
+LABELS = {
+    "water": 0,
+    "kelp": 1,
+    "land": 2,
+    "nodata": 3,
+    "noise": 4,
+}
 
 
 class PlanetRasterDataset_SR_8b(RasterDataset):
@@ -63,8 +71,7 @@ class KelpLabelsDataset(RasterDataset):
 
 def create_chips(out_root, name, dset, chip_size=224, chip_stride=224):
     out_dir = out_root / name
-    (out_dir / "images").mkdir(exist_ok=True, parents=True)
-    (out_dir / "labels").mkdir(exist_ok=True, parents=True)
+    out_dir.mkdir(exist_ok=True, parents=True)
 
     sampler = GridGeoSampler(dset, size=chip_size, stride=chip_stride)
     dataloader = DataLoader(
@@ -80,15 +87,17 @@ def create_chips(out_root, name, dset, chip_size=224, chip_stride=224):
         label = batch["mask"]
 
         black_pixels = (img == torch.zeros((1, NUM_BANDS, 1, 1))).sum()
-        bad_data = (label > 2).sum()
-        kelp_pixels = (label == 1).sum()
+        bad_data = (label > LABELS["land"]).sum()
+        kelp_or_land_pixels = (label == LABELS["kelp"]).sum() + (
+            label == LABELS["land"]
+        ).sum()
         total_pixels = img.numel() / NUM_BANDS
         height = img.shape[2]
         width = img.shape[3]
 
         if (
             (bad_data > 0)
-            or (kelp_pixels == 0)
+            or (kelp_or_land_pixels == 0)
             or (black_pixels / total_pixels) > MAX_NODATA_PROPORTION
             or height < chip_size
             or width < chip_size
@@ -102,10 +111,7 @@ def create_chips(out_root, name, dset, chip_size=224, chip_stride=224):
         )  # Keep labels as uint8 for efficiency
 
         # Save the image as npz
-        np.savez_compressed(out_dir / "images" / f"{i}.npz", data=img_array)
-
-        # Save the label as npz
-        np.savez_compressed(out_dir / "labels" / f"{i}.npz", data=label_array)
+        np.savez_compressed(out_dir / f"{i}.npz", image=img_array, label=label_array)
 
 
 def load_dataset(data_dir):
@@ -118,30 +124,30 @@ def load_dataset(data_dir):
 def main():
     """
     Main function to process files and create chips.
-    Expects three command line arguments:
-        - data_dir: Directory containing the input GeoTIFF files.
-        - output_dir: Directory to save the output chips.
-        - chip_size: Size of the square chips.
     """
-    if 4 > len(sys.argv) > 5:  # noqa: PLR2004
-        print(
-            "Usage: python script.py <data_dir> <output_dir> <chip_size> <chip_stride=chip_size>"
-        )
-        sys.exit(1)
+    parser = argparse.ArgumentParser()
 
-    data_dir = Path(sys.argv[1])
-    output_dir = Path(sys.argv[2])
-    chip_size = int(sys.argv[3])
-    chip_stride = int(sys.argv[4]) if len(sys.argv) > 4 else chip_size
+    parser.add_argument(
+        "data_dir", type=Path, help="Directory containing the input GeoTIFF files."
+    )
+    parser.add_argument(
+        "output_dir", type=Path, help="Directory to save the output chips."
+    )
+    parser.add_argument(
+        "--size", type=int, default=224, help="Size of the square chips."
+    )
+    parser.add_argument("--stride", type=int, default=168, help="Stride for the chips.")
 
-    train_ds = load_dataset(data_dir / "train")
-    create_chips(output_dir, "train", train_ds, chip_size, chip_stride)
+    args = parser.parse_args()
 
-    val_ds = load_dataset(data_dir / "val")
-    create_chips(output_dir, "val", val_ds, chip_size, chip_stride)
+    train_ds = load_dataset(args.data_dir / "train")
+    create_chips(args.output_dir, "train", train_ds, args.size, args.stride)
 
-    test_ds = load_dataset(data_dir / "test")
-    create_chips(output_dir, "test", test_ds, chip_size, chip_stride)
+    val_ds = load_dataset(args.data_dir / "val")
+    create_chips(args.output_dir, "val", val_ds, args.size, args.stride)
+
+    test_ds = load_dataset(args.data_dir / "test")
+    create_chips(args.output_dir, "test", test_ds, args.size, args.stride)
 
 
 if __name__ == "__main__":
