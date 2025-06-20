@@ -19,7 +19,7 @@ from finetune.segment.pskelp_model import PSKelpSegmentor  # noqa: F401
 # %%
 def cli_main():
     """
-    Command-line inteface to run Segmentation Model with PSKelpDataModule.
+    Command-line interface to run Segmentation Model with PSKelpDataModule.
     """
     cli = LightningCLI(
         PSKelpSegmentor,
