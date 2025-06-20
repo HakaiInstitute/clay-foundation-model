@@ -1,0 +1,46 @@
+name: "kelp_segmentation_ps8b_ensemble"
+platform: "ensemble"
+max_batch_size: 16
+input [
+    {
+        name: "IMAGE"
+        data_type: TYPE_INT64
+        dims: [8, 224, 224]
+    }
+]
+output [
+    {
+        name: "SEGMENTATION"
+        data_type: TYPE_FP32
+        dims: [2, -1, -1]
+
+    }
+]
+ensemble_scheduling {
+    step [
+        {
+            model_name: "kelp_segmentation_ps8b_preprocessing"
+            model_version: -1
+            input_map {
+                key: "input"
+                value: "IMAGE"
+            }
+            output_map {
+                key: "output"
+                value: "preprocessed_image"
+            }
+        },
+        {
+            model_name: "kelp_segmentation_ps8b_model"
+            model_version: -1
+            input_map {
+                key: "input"
+                value: "preprocessed_image"
+            }
+            output_map {
+                key: "output"
+                value: "SEGMENTATION"
+            }
+        }
+    ]
+}

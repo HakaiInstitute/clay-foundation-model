@@ -1,0 +1,18 @@
+name: "kelp_segmentation_ps8b_preprocessing"
+backend: "onnxruntime"
+max_batch_size: 16
+input [
+    {
+        name: "input"
+        data_type: TYPE_INT64
+        dims: [8, 224, 224]
+    }
+]
+output [
+    {
+        name: "output"
+        data_type: TYPE_FP32
+        dims: [8, 224, 224]
+
+    }
+]
