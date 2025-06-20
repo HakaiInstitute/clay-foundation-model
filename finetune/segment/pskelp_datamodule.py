@@ -55,17 +55,17 @@ class PSKelpDataset(Dataset):
         return A.Compose([
             A.D4(),  # Random flip/rotation combinations
             A.Normalize(mean=mean, std=std, max_pixel_value=1.0, always_apply=True),
-            A.MotionBlur(
-                blur_limit=(3, 5),      # Very subtle blur, 3-5 pixel kernel
-                allow_shifted=True,     # Allows directional blur
-                p=0.15                  # Low probability - most images are sharp
-            ),
-            A.GaussNoise(
-                var_limit=(0.0001, 0.001),  # Very low noise
-                mean=0,
-                per_channel=True,
-                p=0.3
-            ),
+            # A.MotionBlur(
+            #     blur_limit=(3, 5),      # Very subtle blur, 3-5 pixel kernel
+            #     allow_shifted=True,     # Allows directional blur
+            #     p=0.15                  # Low probability - most images are sharp
+            # ),
+            # A.GaussNoise(
+            #     var_limit=(0.0001, 0.001),  # Very low noise
+            #     mean=0,
+            #     per_channel=True,
+            #     p=0.3
+            # ),
             A.ToTensorV2(),
         ])
 
