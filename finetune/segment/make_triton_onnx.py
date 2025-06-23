@@ -27,10 +27,12 @@ CHECKPOINT_PATH = (
 )
 CLAY_CHECKPOINT_PATH = "../../checkpoints/clay-v1.5.ckpt"
 METADATA_PATH = "../../configs/metadata.yaml"
-OUTPUT_MODEL_PATH = ("../../triton_server/models/"
-                     "kelp_segmentation_ps8b_model/2/model.onnx")
-OUTPUT_PREMODEL_PATH = ("../../triton_server/models/"
-                        "kelp_segmentation_ps8b_preprocessing/2/model.onnx")
+OUTPUT_MODEL_PATH = (
+    "../../triton_server/models/kelp_segmentation_ps8b_model/2/model.onnx"
+)
+OUTPUT_PREMODEL_PATH = (
+    "../../triton_server/models/kelp_segmentation_ps8b_preprocessing/2/model.onnx"
+)
 
 TRAIN_CHIP_DIR = "../../data/cvpr/ny/train/chips/"
 TRAIN_LABEL_DIR = "../../data/cvpr/ny/train/labels/"
@@ -50,9 +52,9 @@ PLATFORM = "planetscope-sr"
 # In[ ]:
 
 
-def get_model(chesapeake_checkpoint_path, clay_checkpoint_path, metadata_path):
+def get_model(checkpoint_path, clay_checkpoint_path, metadata_path):
     model = PSKelpSegmentor.load_from_checkpoint(
-        checkpoint_path=chesapeake_checkpoint_path,
+        checkpoint_path=checkpoint_path,
         metadata_path=metadata_path,
         ckpt_path=clay_checkpoint_path,
     )
@@ -85,13 +87,9 @@ class PreprocessingModel(torch.nn.Module):
 
 
 model = PreprocessingModel(
-    mean=torch.tensor(
-        [1720.0, 1715.0, 1913.0, 2088.0, 2274.0, 2290.0, 2613.0, 3970.0]
-    ),
-    std=torch.tensor(
-        [747.0, 698.0, 739.0, 768.0, 849.0, 868.0, 849.0, 914.0]
-    ),
-    max_pixel_value=1.0
+    mean=torch.tensor([1720.0, 1715.0, 1913.0, 2088.0, 2274.0, 2290.0, 2613.0, 3970.0]),
+    std=torch.tensor([747.0, 698.0, 739.0, 768.0, 849.0, 868.0, 849.0, 914.0]),
+    max_pixel_value=1.0,
 ).to(DEVICE)
 
 x = torch.randint(
@@ -227,4 +225,3 @@ torch.onnx.export(
     dynamic_axes=dynamic_axes,  # Dynamic axes specification
     verbose=False,
 )
-

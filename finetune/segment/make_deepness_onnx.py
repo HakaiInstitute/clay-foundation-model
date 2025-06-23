@@ -188,4 +188,3 @@ m6.value = json.dumps(
 
 onnx.save(onnx_model, OUTPUT_PATH_ONNX)
 onnx.checker.check_model(onnx_model)
-

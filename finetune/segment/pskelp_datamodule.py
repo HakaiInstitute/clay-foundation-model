@@ -12,6 +12,7 @@ Proceedings of the 2019 Conference on Computer Vision and Pattern Recognition
 
 Dataset URL: https://lila.science/datasets/chesapeakelandcover
 """
+
 from pathlib import Path
 
 import albumentations as A
@@ -52,22 +53,24 @@ class PSKelpDataset(Dataset):
         Returns:
             torchvision.transforms.Compose: A composition of transforms.
         """
-        return A.Compose([
-            A.D4(),  # Random flip/rotation combinations
-            A.Normalize(mean=mean, std=std, max_pixel_value=1.0, always_apply=True),
-            # A.MotionBlur(
-            #     blur_limit=(3, 5),      # Very subtle blur, 3-5 pixel kernel
-            #     allow_shifted=True,     # Allows directional blur
-            #     p=0.15                  # Low probability - most images are sharp
-            # ),
-            # A.GaussNoise(
-            #     var_limit=(0.0001, 0.001),  # Very low noise
-            #     mean=0,
-            #     per_channel=True,
-            #     p=0.3
-            # ),
-            A.ToTensorV2(),
-        ])
+        return A.Compose(
+            [
+                A.D4(),  # Random flip/rotation combinations
+                A.Normalize(mean=mean, std=std, max_pixel_value=1.0, always_apply=True),
+                # A.MotionBlur(
+                #     blur_limit=(3, 5),      # Very subtle blur, 3-5 pixel kernel
+                #     allow_shifted=True,     # Allows directional blur
+                #     p=0.15                  # Low probability - most images are sharp
+                # ),
+                # A.GaussNoise(
+                #     var_limit=(0.0001, 0.001),  # Very low noise
+                #     mean=0,
+                #     per_channel=True,
+                #     p=0.3
+                # ),
+                A.ToTensorV2(),
+            ]
+        )
 
     @staticmethod
     def create_test_transforms(mean, std):
@@ -81,11 +84,13 @@ class PSKelpDataset(Dataset):
         Returns:
             torchvision.transforms.Compose: A composition of transforms.
         """
-        return A.Compose([
-            A.D4(),  # Random flip/rotation combinations
-            A.Normalize(mean=mean, std=std, max_pixel_value=1.0, always_apply=True),
-            A.ToTensorV2(),
-        ])
+        return A.Compose(
+            [
+                A.D4(),  # Random flip/rotation combinations
+                A.Normalize(mean=mean, std=std, max_pixel_value=1.0, always_apply=True),
+                A.ToTensorV2(),
+            ]
+        )
 
     def __len__(self):
         return len(self.chips)
@@ -102,8 +107,12 @@ class PSKelpDataset(Dataset):
         """
         chip_name = self.chip_dir / self.chips[idx]
         data = np.load(chip_name)
-        chip = np.moveaxis(data["image"], 0, -1).astype(np.float32)  # Move channel dimension to last position
-        label = np.moveaxis(data["label"], 0, -1)  # Move channel dimension to last position
+        chip = np.moveaxis(data["image"], 0, -1).astype(
+            np.float32
+        )  # Move channel dimension to last position
+        label = np.moveaxis(
+            data["label"], 0, -1
+        )  # Move channel dimension to last position
 
         # Remap labels to match desired classes
         label_mapping = {
@@ -118,7 +127,7 @@ class PSKelpDataset(Dataset):
         augmented = self.transform(image=chip, mask=remapped_label)
         sample = {
             "pixels": augmented["image"],
-            "label": augmented['mask'].squeeze(-1),
+            "label": augmented["mask"].squeeze(-1),
             "time": torch.zeros(4),  # Placeholder for time information
             "latlon": torch.zeros(4),  # Placeholder for latlon information
         }

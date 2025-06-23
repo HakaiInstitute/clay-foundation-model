@@ -1,6 +1,6 @@
 services:
   triton_server:
-    image: nvcr.io/nvidia/tritonserver:25.05-py3
+    image: nvcr.io/nvidia/tritonserver:25.03-py3
     container_name: triton_server
     runtime: nvidia
     shm_size: 256m
