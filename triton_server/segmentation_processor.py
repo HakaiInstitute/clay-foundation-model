@@ -222,10 +222,10 @@ class SegmentationProcessor:
         # Convert to class indices (argmax + 1 to avoid 0 values)
         if tile_result.shape[0] == 1:
             # Binary segmentation
-            processed = (tile_result[0] != 0).astype(np.uint8) + 1
+            processed = (tile_result[0] != 0).astype(np.uint8)
         else:
             # Multi-class segmentation
-            processed = np.argmax(tile_result, axis=0).astype(np.uint8) + 1
+            processed = np.argmax(tile_result, axis=0).astype(np.uint8)
 
         return processed
 
@@ -310,7 +310,7 @@ if __name__ == "__main__":
     # Create configuration
     config = ProcessingConfig(
         tile_size=224,
-        stride=112,  # 75% overlap
+        stride=56,  # 75% overlap
         batch_size=5,
         probability_threshold=0.5,
         median_blur_size=5,
