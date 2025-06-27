@@ -56,18 +56,7 @@ class PSKelpDataset(Dataset):
         return A.Compose(
             [
                 A.D4(),  # Random flip/rotation combinations
-                A.Normalize(mean=mean, std=std, max_pixel_value=1.0, always_apply=True),
-                # A.MotionBlur(
-                #     blur_limit=(3, 5),      # Very subtle blur, 3-5 pixel kernel
-                #     allow_shifted=True,     # Allows directional blur
-                #     p=0.15                  # Low probability - most images are sharp
-                # ),
-                # A.GaussNoise(
-                #     var_limit=(0.0001, 0.001),  # Very low noise
-                #     mean=0,
-                #     per_channel=True,
-                #     p=0.3
-                # ),
+                A.Normalize(mean=mean, std=std, max_pixel_value=1.0, p=1.0),
                 A.ToTensorV2(),
             ]
         )
@@ -86,8 +75,7 @@ class PSKelpDataset(Dataset):
         """
         return A.Compose(
             [
-                A.D4(),  # Random flip/rotation combinations
-                A.Normalize(mean=mean, std=std, max_pixel_value=1.0, always_apply=True),
+                A.Normalize(mean=mean, std=std, max_pixel_value=1.0, p=1.0),
                 A.ToTensorV2(),
             ]
         )
@@ -116,11 +104,11 @@ class PSKelpDataset(Dataset):
 
         # Remap labels to match desired classes
         label_mapping = {
-            0: 0,
-            1: 1,
-            2: 0,
-            3: 0,
-            4: 0,
+            0: 0,  # water -> not kelp
+            1: 1,  # kelp
+            2: 0,  # land -> not kelp
+            3: 2,  # nodata -> don't care
+            4: 2,  # noise -> don't care
         }
         remapped_label = np.vectorize(label_mapping.get)(label)
 
@@ -181,15 +169,14 @@ class PSKelpDataModule(L.LightningDataModule):
         train_transforms = PSKelpDataset.create_train_transforms(mean=mean, std=std)
         test_transforms = PSKelpDataset.create_test_transforms(mean=mean, std=std)
 
-        if stage in {"fit", None}:
-            self.trn_ds = PSKelpDataset(
-                chip_dir=self.train_chip_dir,
-                transform=train_transforms,
-            )
-            self.val_ds = PSKelpDataset(
-                chip_dir=self.val_chip_dir,
-                transform=test_transforms,
-            )
+        self.trn_ds = PSKelpDataset(
+            chip_dir=self.train_chip_dir,
+            transform=train_transforms,
+        )
+        self.val_ds = PSKelpDataset(
+            chip_dir=self.val_chip_dir,
+            transform=test_transforms,
+        )
         if stage in {"test", None}:
             self.test_ds = PSKelpDataset(
                 chip_dir=self.test_chip_dir,

@@ -23,6 +23,7 @@ class PSKelpSegmentor(L.LightningModule):
         iou (Metric): Intersection over Union metric.
         f1 (Metric): F1 Score metric.
         lr (float): Learning rate.
+        ignore_index (int | None): Index of the class to ignore in error calculations
     """
 
     def __init__(  # # noqa: PLR0913
@@ -33,6 +34,7 @@ class PSKelpSegmentor(L.LightningModule):
         wd,
         b1,
         b2,
+        ignore_index: int | None = None,
     ):
         super().__init__()
         self.save_hyperparameters()  # Save hyperparameters for checkpointing
@@ -41,15 +43,17 @@ class PSKelpSegmentor(L.LightningModule):
             ckpt_path=ckpt_path,
         )
 
-        self.loss_fn = LovaszLoss(mode="binary")
+        self.loss_fn = LovaszLoss(mode="binary", ignore_index=ignore_index)
         self.iou = JaccardIndex(
             task="binary",
             average="macro",
+            ignore_index=ignore_index,
         )
         self.f1 = F1Score(
             task="binary",
             num_classes=num_classes,
             average="macro",
+            ignore_index=ignore_index,
         )
 
     def forward(self, datacube):
@@ -192,3 +196,16 @@ class PSKelpSegmentor(L.LightningModule):
             torch.Tensor: The loss value.
         """
         return self.shared_step(batch, batch_idx, "val")
+
+    def test_step(self, batch, batch_idx):
+        """
+        Test step for the model.
+
+        Args:
+            batch (dict): A dictionary containing the batch data.
+            batch_idx (int): The index of the batch.
+
+        Returns:
+            torch.Tensor: The loss value.
+        """
+        return self.shared_step(batch, batch_idx, "test")

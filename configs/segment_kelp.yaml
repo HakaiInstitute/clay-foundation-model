@@ -1,9 +1,9 @@
 # lightning.pytorch==2.1.2
 seed_everything: 42
 data:
-  train_chip_dir: /home/taylor/data/PlanetScope/pre-chipped-8b/224_20250620/train/
-  val_chip_dir: /home/taylor/data/PlanetScope/pre-chipped-8b/224_20250620/val/
-  test_chip_dir: /home/taylor/data/PlanetScope/pre-chipped-8b/224_20250620/test/
+  train_chip_dir: /home/taylor/data/PlanetScope/pre-chipped-8b/224_20250625/train/
+  val_chip_dir: /home/taylor/data/PlanetScope/pre-chipped-8b/224_20250625/val/
+  test_chip_dir: /home/taylor/data/PlanetScope/pre-chipped-8b/224_20250625/test/
   metadata_path: configs/metadata.yaml
   batch_size: 64
   num_workers: 8
@@ -15,6 +15,7 @@ model:
   wd: 0.05
   b1: 0.9
   b2: 0.95
+  ignore_index: 2
 trainer:
   accelerator: auto
   strategy: ddp

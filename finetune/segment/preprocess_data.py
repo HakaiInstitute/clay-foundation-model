@@ -86,19 +86,15 @@ def create_chips(out_root, name, dset, chip_size=224, chip_stride=224):
         img = batch["image"]
         label = batch["mask"]
 
-        black_pixels = (img == torch.zeros((1, NUM_BANDS, 1, 1))).sum()
-        bad_data = (label > LABELS["land"]).sum()
-        kelp_or_land_pixels = (label == LABELS["kelp"]).sum() + (
-            label == LABELS["land"]
-        ).sum()
-        total_pixels = img.numel() / NUM_BANDS
+        kelp_pixels = (label == LABELS["kelp"]).sum()
+        land_pixels = (label == LABELS["land"]).sum()
         height = img.shape[2]
         width = img.shape[3]
 
         if (
-            (bad_data > 0)
-            or (kelp_or_land_pixels == 0)
-            or (black_pixels / total_pixels) > MAX_NODATA_PROPORTION
+            (
+                name == "train" and kelp_pixels == 0 and land_pixels == 0
+            )  # Train chips must have some kelp or land present
             or height < chip_size
             or width < chip_size
         ):

@@ -11,7 +11,7 @@ warnings.filterwarnings("ignore")
 
 
 # In[ ]:
-
+from pathlib import Path
 
 import torch
 
@@ -23,15 +23,15 @@ from finetune.segment.pskelp_model import PSKelpSegmentor
 
 
 CHECKPOINT_PATH = (
-    "../../checkpoints/segment/kelp-1class-segment_epoch-76_val-iou-0.7532.ckpt"
+    "../../checkpoints/model-frosty-silence-35.ckpt"
 )
 CLAY_CHECKPOINT_PATH = "../../checkpoints/clay-v1.5.ckpt"
 METADATA_PATH = "../../configs/metadata.yaml"
 OUTPUT_MODEL_PATH = (
-    "../../triton_server/models/kelp_segmentation_ps8b_model/2/model.onnx"
+    "./triton/kelp_segmentation_ps8b_model/2/model.onnx"
 )
 OUTPUT_PREMODEL_PATH = (
-    "../../triton_server/models/kelp_segmentation_ps8b_preprocessing/2/model.onnx"
+    "./triton/kelp_segmentation_ps8b_preprocessing/1/model.onnx"
 )
 
 TRAIN_CHIP_DIR = "../../data/cvpr/ny/train/chips/"
@@ -45,6 +45,9 @@ NUM_BANDS = 8
 BATCH_SIZE = 32
 NUM_WORKERS = 1
 PLATFORM = "planetscope-sr"
+
+Path(OUTPUT_MODEL_PATH).parent.mkdir(parents=True, exist_ok=True)
+Path(OUTPUT_PREMODEL_PATH).parent.mkdir(parents=True, exist_ok=True)
 
 
 # ### Model Loading
@@ -170,18 +173,7 @@ class DeepnessModel(torch.nn.Module):
             "gsd": gsd,
         }
         logits = self.model(datacube)
-        probs = torch.sigmoid(logits)
-
-        # Convert class 1 probabilities to 2 class probs shape: # [batch_size, 2, height, width]
-        probs = torch.cat(
-            [
-                1 - probs,  # Background class
-                probs,  # Kelp class
-            ],
-            dim=1,
-        )
-
-        return probs
+        return torch.sigmoid(logits)
 
 
 model = get_model(CHECKPOINT_PATH, CLAY_CHECKPOINT_PATH, METADATA_PATH).to(DEVICE)

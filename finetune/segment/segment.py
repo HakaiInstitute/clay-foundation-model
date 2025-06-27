@@ -34,3 +34,5 @@ if __name__ == "__main__":
     cli_main()
 
     print("Done!")
+
+    # Usage: uv run -m finetune.segment.segment fit --config configs/segment_kelp.yaml
