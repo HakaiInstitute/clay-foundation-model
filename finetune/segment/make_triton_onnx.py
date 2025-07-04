@@ -22,17 +22,11 @@ from finetune.segment.pskelp_model import PSKelpSegmentor
 # In[ ]:
 
 
-CHECKPOINT_PATH = (
-    "../../checkpoints/model-frosty-silence-35.ckpt"
-)
+CHECKPOINT_PATH = "../../checkpoints/model-frosty-silence-35.ckpt"
 CLAY_CHECKPOINT_PATH = "../../checkpoints/clay-v1.5.ckpt"
 METADATA_PATH = "../../configs/metadata.yaml"
-OUTPUT_MODEL_PATH = (
-    "./triton/kelp_segmentation_ps8b_model/2/model.onnx"
-)
-OUTPUT_PREMODEL_PATH = (
-    "./triton/kelp_segmentation_ps8b_preprocessing/1/model.onnx"
-)
+OUTPUT_MODEL_PATH = "./triton/kelp_segmentation_ps8b_model/2/model.onnx"
+OUTPUT_PREMODEL_PATH = "./triton/kelp_segmentation_ps8b_preprocessing/1/model.onnx"
 
 TRAIN_CHIP_DIR = "../../data/cvpr/ny/train/chips/"
 TRAIN_LABEL_DIR = "../../data/cvpr/ny/train/labels/"

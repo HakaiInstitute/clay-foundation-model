@@ -26,16 +26,12 @@ from finetune.segment.pskelp_model import PSKelpSegmentor
 
 
 CHECKPOINT_PATH = (
-    "../../checkpoints/segment/kelp-1class-segment_epoch-76_val-iou-0.7532.ckpt"
+    "../../checkpoints/model-valiant-jazz-61.ckpt"
 )
 CLAY_CHECKPOINT_PATH = "../../checkpoints/clay-v1.5.ckpt"
 METADATA_PATH = "../../configs/metadata.yaml"
-OUTPUT_PATH_ONNX = "../../checkpoints/segment/kelp-1class-segment_epoch-76_val-iou-0.7532-deepness.onnx"
+OUTPUT_PATH_ONNX = "../../checkpoints/model-valiant-jazz-61.onnx"
 
-TRAIN_CHIP_DIR = "../../data/cvpr/ny/train/chips/"
-TRAIN_LABEL_DIR = "../../data/cvpr/ny/train/labels/"
-VAL_CHIP_DIR = "../../data/cvpr/ny/val/chips/"
-VAL_LABEL_DIR = "../../data/cvpr/ny/val/labels/"
 TILE_SIZE = 224
 DEVICE = torch.device("cpu")
 
