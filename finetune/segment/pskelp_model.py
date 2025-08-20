@@ -4,16 +4,16 @@ Segmentor class.
 """
 
 import lightning as L
-import segmentation_models_pytorch as smp
 import torch
 import torch.nn.functional as F
+from segmentation_models_pytorch.losses import LovaszLoss
 from torch import optim
-from torchmetrics.classification import F1Score, MulticlassJaccardIndex
+from torchmetrics.classification import F1Score, JaccardIndex
 
 from finetune.segment.factory import Segmentor
 
 
-class ChesapeakeSegmentor(L.LightningModule):
+class PSKelpSegmentor(L.LightningModule):
     """
     LightningModule for segmentation tasks, utilizing Clay Segmentor.
 
@@ -23,6 +23,7 @@ class ChesapeakeSegmentor(L.LightningModule):
         iou (Metric): Intersection over Union metric.
         f1 (Metric): F1 Score metric.
         lr (float): Learning rate.
+        ignore_index (int | None): Index of the class to ignore in error calculations
     """
 
     def __init__(  # # noqa: PLR0913
@@ -33,6 +34,7 @@ class ChesapeakeSegmentor(L.LightningModule):
         wd,
         b1,
         b2,
+        ignore_index: int | None = None,
     ):
         super().__init__()
         self.save_hyperparameters()  # Save hyperparameters for checkpointing
@@ -41,15 +43,17 @@ class ChesapeakeSegmentor(L.LightningModule):
             ckpt_path=ckpt_path,
         )
 
-        self.loss_fn = smp.losses.FocalLoss(mode="multiclass")
-        self.iou = MulticlassJaccardIndex(
-            num_classes=num_classes,
-            average="weighted",
+        self.loss_fn = LovaszLoss(mode="binary", ignore_index=ignore_index)
+        self.iou = JaccardIndex(
+            task="binary",
+            average="macro",
+            ignore_index=ignore_index,
         )
         self.f1 = F1Score(
-            task="multiclass",
+            task="binary",
             num_classes=num_classes,
-            average="weighted",
+            average="macro",
+            ignore_index=ignore_index,
         )
 
     def forward(self, datacube):
@@ -63,8 +67,10 @@ class ChesapeakeSegmentor(L.LightningModule):
         Returns:
             torch.Tensor: The segmentation logits.
         """
-        waves = torch.tensor([0.65, 0.56, 0.48, 0.842])  # NAIP wavelengths
-        gsd = torch.tensor(1.0)  # NAIP GSD
+        waves = torch.tensor(
+            [0.443, 0.490, 0.531, 0.565, 0.610, 0.665, 0.705, 0.865]
+        )  # Planet SR wavelengths
+        gsd = torch.tensor(5.0)  # Planet SR GSD
 
         # Forward pass through the network
         return self.model(
@@ -122,7 +128,7 @@ class ChesapeakeSegmentor(L.LightningModule):
         Returns:
             torch.Tensor: The loss value.
         """
-        labels = batch["label"].long()
+        labels = batch["label"].long().unsqueeze(1)  # [B H W]
         outputs = self(batch)
         outputs = F.interpolate(
             outputs,
@@ -190,3 +196,16 @@ class ChesapeakeSegmentor(L.LightningModule):
             torch.Tensor: The loss value.
         """
         return self.shared_step(batch, batch_idx, "val")
+
+    def test_step(self, batch, batch_idx):
+        """
+        Test step for the model.
+
+        Args:
+            batch (dict): A dictionary containing the batch data.
+            batch_idx (int): The index of the batch.
+
+        Returns:
+            torch.Tensor: The loss value.
+        """
+        return self.shared_step(batch, batch_idx, "test")

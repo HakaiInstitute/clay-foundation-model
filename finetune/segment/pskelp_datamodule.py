@@ -13,45 +13,36 @@ Proceedings of the 2019 Conference on Computer Vision and Pattern Recognition
 Dataset URL: https://lila.science/datasets/chesapeakelandcover
 """
 
-import re
 from pathlib import Path
 
+import albumentations as A
 import lightning as L
 import numpy as np
 import torch
 import yaml
 from box import Box
 from torch.utils.data import DataLoader, Dataset
-from torchvision.transforms import v2
 
 
-class ChesapeakeDataset(Dataset):
+class PSKelpDataset(Dataset):
     """
     Dataset class for the Chesapeake Bay segmentation dataset.
 
     Args:
         chip_dir (str): Directory containing the image chips.
         label_dir (str): Directory containing the labels.
-        metadata (Box): Metadata for normalization and other dataset-specific details.
-        platform (str): Platform identifier used in metadata.
+        transform (Callable): Albumentations transforms for this dataset.
     """
 
-    def __init__(self, chip_dir, label_dir, metadata, platform):
+    def __init__(self, chip_dir, transform):
         self.chip_dir = Path(chip_dir)
-        self.label_dir = Path(label_dir)
-        self.metadata = metadata
-        self.transform = self.create_transforms(
-            mean=list(metadata[platform].bands.mean.values()),
-            std=list(metadata[platform].bands.std.values()),
-        )
+        self.transform = transform
 
-        # Load chip and label file names
-        self.chips = [chip_path.name for chip_path in self.chip_dir.glob("*.npy")][
-            :1000
-        ]
-        self.labels = [re.sub("_naip-new_", "_lc_", chip) for chip in self.chips]
+        # Load chip file names
+        self.chips = [chip_path.name for chip_path in self.chip_dir.glob("*.npz")]
 
-    def create_transforms(self, mean, std):
+    @staticmethod
+    def create_train_transforms(mean, std):
         """
         Create normalization transforms.
 
@@ -62,10 +53,31 @@ class ChesapeakeDataset(Dataset):
         Returns:
             torchvision.transforms.Compose: A composition of transforms.
         """
-        return v2.Compose(
+        return A.Compose(
             [
-                v2.Normalize(mean=mean, std=std),
-            ],
+                A.D4(),  # Random flip/rotation combinations
+                A.Normalize(mean=mean, std=std, max_pixel_value=1.0, p=1.0),
+                A.ToTensorV2(),
+            ]
+        )
+
+    @staticmethod
+    def create_test_transforms(mean, std):
+        """
+        Create normalization transforms.
+
+        Args:
+            mean (list): Mean values for normalization.
+            std (list): Standard deviation values for normalization.
+
+        Returns:
+            torchvision.transforms.Compose: A composition of transforms.
+        """
+        return A.Compose(
+            [
+                A.Normalize(mean=mean, std=std, max_pixel_value=1.0, p=1.0),
+                A.ToTensorV2(),
+            ]
         )
 
     def __len__(self):
@@ -82,25 +94,35 @@ class ChesapeakeDataset(Dataset):
             dict: A dictionary containing the image, label, and additional information.
         """
         chip_name = self.chip_dir / self.chips[idx]
-        label_name = self.label_dir / self.labels[idx]
-
-        chip = np.load(chip_name).astype(np.float32)
-        label = np.load(label_name)
+        data = np.load(chip_name)
+        chip = np.moveaxis(data["image"], 0, -1).astype(
+            np.float32
+        )  # Move channel dimension to last position
+        label = np.moveaxis(
+            data["label"], 0, -1
+        )  # Move channel dimension to last position
 
         # Remap labels to match desired classes
-        label_mapping = {1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 15: 6}
+        label_mapping = {
+            0: 0,  # water -> not kelp
+            1: 1,  # kelp
+            2: 0,  # land -> not kelp
+            3: 2,  # nodata -> don't care
+            4: 2,  # noise -> don't care
+        }
         remapped_label = np.vectorize(label_mapping.get)(label)
 
+        augmented = self.transform(image=chip, mask=remapped_label)
         sample = {
-            "pixels": self.transform(torch.from_numpy(chip)),
-            "label": torch.from_numpy(remapped_label[0]),
+            "pixels": augmented["image"],
+            "label": augmented["mask"].squeeze(-1),
             "time": torch.zeros(4),  # Placeholder for time information
             "latlon": torch.zeros(4),  # Placeholder for latlon information
         }
         return sample
 
 
-class ChesapeakeDataModule(L.LightningDataModule):
+class PSKelpDataModule(L.LightningDataModule):
     """
     DataModule class for the Chesapeake Bay dataset.
 
@@ -118,9 +140,8 @@ class ChesapeakeDataModule(L.LightningDataModule):
     def __init__(  # noqa: PLR0913
         self,
         train_chip_dir,
-        train_label_dir,
         val_chip_dir,
-        val_label_dir,
+        test_chip_dir,
         metadata_path,
         batch_size,
         num_workers,
@@ -128,9 +149,8 @@ class ChesapeakeDataModule(L.LightningDataModule):
     ):
         super().__init__()
         self.train_chip_dir = train_chip_dir
-        self.train_label_dir = train_label_dir
         self.val_chip_dir = val_chip_dir
-        self.val_label_dir = val_label_dir
+        self.test_chip_dir = test_chip_dir
         self.metadata = Box(yaml.safe_load(open(metadata_path)))
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -143,18 +163,24 @@ class ChesapeakeDataModule(L.LightningDataModule):
         Args:
             stage (str): Stage identifier ('fit' or 'test').
         """
-        if stage in {"fit", None}:
-            self.trn_ds = ChesapeakeDataset(
-                self.train_chip_dir,
-                self.train_label_dir,
-                self.metadata,
-                self.platform,
-            )
-            self.val_ds = ChesapeakeDataset(
-                self.val_chip_dir,
-                self.val_label_dir,
-                self.metadata,
-                self.platform,
+        mean = list(self.metadata[self.platform].bands.mean.values())
+        std = list(self.metadata[self.platform].bands.std.values())
+
+        train_transforms = PSKelpDataset.create_train_transforms(mean=mean, std=std)
+        test_transforms = PSKelpDataset.create_test_transforms(mean=mean, std=std)
+
+        self.trn_ds = PSKelpDataset(
+            chip_dir=self.train_chip_dir,
+            transform=train_transforms,
+        )
+        self.val_ds = PSKelpDataset(
+            chip_dir=self.val_chip_dir,
+            transform=test_transforms,
+        )
+        if stage in {"test", None}:
+            self.test_ds = PSKelpDataset(
+                chip_dir=self.test_chip_dir,
+                transform=test_transforms,
             )
 
     def train_dataloader(self):
@@ -180,6 +206,19 @@ class ChesapeakeDataModule(L.LightningDataModule):
         """
         return DataLoader(
             self.val_ds,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+        )
+
+    def test_dataloader(self):
+        """
+        Create DataLoader for test data.
+
+        Returns:
+            DataLoader: DataLoader for test dataset.
+        """
+        return DataLoader(
+            self.test_ds,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
         )
